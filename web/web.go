@@ -228,6 +228,7 @@ type Options struct {
 	PageTitle                  string
 	RemoteReadSampleLimit      int
 	RemoteReadConcurrencyLimit int
+	RemoteReadBytesInFrame     int
 
 	Gatherer   prometheus.Gatherer
 	Registerer prometheus.Registerer
@@ -291,6 +292,7 @@ func New(logger log.Logger, o *Options) *Handler {
 		h.ruleManager,
 		h.options.RemoteReadSampleLimit,
 		h.options.RemoteReadConcurrencyLimit,
+		h.options.RemoteReadBytesInFrame,
 		h.options.CORSOrigin,
 	)
 
@@ -342,14 +344,14 @@ func New(logger log.Logger, o *Options) *Handler {
 		router.Post("/-/reload", h.reload)
 		router.Put("/-/reload", h.reload)
 	} else {
-		router.Post("/-/quit", func(w http.ResponseWriter, _ *http.Request) {
+		forbiddenAPINotEnabled := func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte("Lifecycle APIs are not enabled"))
-		})
-		router.Post("/-/reload", func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte("Lifecycle APIs are not enabled"))
-		})
+			w.Write([]byte("Lifecycle API is not enabled."))
+		}
+		router.Post("/-/quit", forbiddenAPINotEnabled)
+		router.Put("/-/quit", forbiddenAPINotEnabled)
+		router.Post("/-/reload", forbiddenAPINotEnabled)
+		router.Put("/-/reload", forbiddenAPINotEnabled)
 	}
 	router.Get("/-/quit", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)

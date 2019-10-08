@@ -27,7 +27,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 	tests := []struct {
 		input       labels.Labels
 		expectedErr string
-		shouldPass  bool
 		description string
 	}{
 		{
@@ -36,7 +35,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"labelName", "labelValue",
 			),
 			expectedErr: "",
-			shouldPass:  true,
 			description: "regular labels",
 		},
 		{
@@ -45,7 +43,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"_labelName", "labelValue",
 			),
 			expectedErr: "",
-			shouldPass:  true,
 			description: "label name with _",
 		},
 		{
@@ -54,7 +51,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"@labelName", "labelValue",
 			),
 			expectedErr: "invalid label name: @labelName",
-			shouldPass:  false,
 			description: "label name with @",
 		},
 		{
@@ -63,7 +59,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"123labelName", "labelValue",
 			),
 			expectedErr: "invalid label name: 123labelName",
-			shouldPass:  false,
 			description: "label name starts with numbers",
 		},
 		{
@@ -72,7 +67,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"", "labelValue",
 			),
 			expectedErr: "invalid label name: ",
-			shouldPass:  false,
 			description: "label name is empty string",
 		},
 		{
@@ -81,7 +75,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"labelName", string([]byte{0xff}),
 			),
 			expectedErr: "invalid label value: " + string([]byte{0xff}),
-			shouldPass:  false,
 			description: "label value is an invalid UTF-8 value",
 		},
 		{
@@ -89,7 +82,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"__name__", "@invalid_name",
 			),
 			expectedErr: "invalid metric name: @invalid_name",
-			shouldPass:  false,
 			description: "metric name starts with @",
 		},
 		{
@@ -98,7 +90,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"__name__", "name2",
 			),
 			expectedErr: "duplicate label with name: __name__",
-			shouldPass:  false,
 			description: "duplicate label names",
 		},
 		{
@@ -107,7 +98,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"label2", "name",
 			),
 			expectedErr: "",
-			shouldPass:  true,
 			description: "duplicate label values",
 		},
 		{
@@ -116,7 +106,6 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 				"label2", "name",
 			),
 			expectedErr: "invalid label name: ",
-			shouldPass:  false,
 			description: "don't report as duplicate label name",
 		},
 	}
@@ -124,16 +113,11 @@ func TestValidateLabelsAndMetricName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			err := validateLabelsAndMetricName(test.input)
-			if err == nil {
-				if !test.shouldPass {
-					t.Fatalf("Test should fail, but passed instead.")
-				}
+			if test.expectedErr != "" {
+				testutil.NotOk(t, err)
+				testutil.Equals(t, test.expectedErr, err.Error())
 			} else {
-				if test.shouldPass {
-					t.Fatalf("Test should pass, got unexpected error: %v", err)
-				} else if err.Error() != test.expectedErr {
-					t.Fatalf("Test should fail with: %s got unexpected error instead: %v", test.expectedErr, err)
-				}
+				testutil.Ok(t, err)
 			}
 		})
 	}
@@ -151,21 +135,11 @@ func TestConcreteSeriesSet(t *testing.T) {
 	c := &concreteSeriesSet{
 		series: []storage.Series{series1, series2},
 	}
-	if !c.Next() {
-		t.Fatalf("Expected Next() to be true.")
-	}
-	if c.At() != series1 {
-		t.Fatalf("Unexpected series returned.")
-	}
-	if !c.Next() {
-		t.Fatalf("Expected Next() to be true.")
-	}
-	if c.At() != series2 {
-		t.Fatalf("Unexpected series returned.")
-	}
-	if c.Next() {
-		t.Fatalf("Expected Next() to be false.")
-	}
+	testutil.Assert(t, c.Next(), "Expected Next() to be true.")
+	testutil.Equals(t, series1, c.At(), "Unexpected series returned.")
+	testutil.Assert(t, c.Next(), "Expected Next() to be true.")
+	testutil.Equals(t, series2, c.At(), "Unexpected series returned.")
+	testutil.Assert(t, !c.Next(), "Expected Next() to be false.")
 }
 
 func TestConcreteSeriesClonesLabels(t *testing.T) {
@@ -211,4 +185,28 @@ func TestFromQueryResultWithDuplicates(t *testing.T) {
 	testutil.Assert(t, isErrSeriesSet, "Expected resulting series to be an errSeriesSet")
 	errMessage := errSeries.Err().Error()
 	testutil.Assert(t, errMessage == "duplicate label with name: foo", fmt.Sprintf("Expected error to be from duplicate label, but got: %s", errMessage))
+}
+
+func TestNegotiateResponseType(t *testing.T) {
+	r, err := NegotiateResponseType([]prompb.ReadRequest_ResponseType{
+		prompb.ReadRequest_STREAMED_XOR_CHUNKS,
+		prompb.ReadRequest_SAMPLES,
+	})
+	testutil.Ok(t, err)
+	testutil.Equals(t, prompb.ReadRequest_STREAMED_XOR_CHUNKS, r)
+
+	r2, err := NegotiateResponseType([]prompb.ReadRequest_ResponseType{
+		prompb.ReadRequest_SAMPLES,
+		prompb.ReadRequest_STREAMED_XOR_CHUNKS,
+	})
+	testutil.Ok(t, err)
+	testutil.Equals(t, prompb.ReadRequest_SAMPLES, r2)
+
+	r3, err := NegotiateResponseType([]prompb.ReadRequest_ResponseType{})
+	testutil.Ok(t, err)
+	testutil.Equals(t, prompb.ReadRequest_SAMPLES, r3)
+
+	_, err = NegotiateResponseType([]prompb.ReadRequest_ResponseType{20})
+	testutil.NotOk(t, err, "expected error due to not supported requested response types")
+	testutil.Equals(t, "server does not support any of the requested response types: [20]; supported: map[SAMPLES:{} STREAMED_XOR_CHUNKS:{}]", err.Error())
 }

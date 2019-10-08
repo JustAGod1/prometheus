@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -76,7 +77,7 @@ type recoverableError struct {
 func (c *Client) Store(ctx context.Context, req []byte) error {
 	httpReq, err := http.NewRequest("POST", c.url.String(), bytes.NewReader(req))
 	if err != nil {
-		// Errors from NewRequest are from unparseable URLs, so are not
+		// Errors from NewRequest are from unparsable URLs, so are not
 		// recoverable.
 		return err
 	}
@@ -155,13 +156,14 @@ func (c *Client) Read(ctx context.Context, query *prompb.Query) (*prompb.QueryRe
 		io.Copy(ioutil.Discard, httpResp.Body)
 		httpResp.Body.Close()
 	}()
-	if httpResp.StatusCode/100 != 2 {
-		return nil, errors.Errorf("server returned HTTP status %s", httpResp.Status)
-	}
 
 	compressed, err = ioutil.ReadAll(httpResp.Body)
 	if err != nil {
-		return nil, errors.Wrap(err, "error reading response")
+		return nil, errors.Wrap(err, fmt.Sprintf("error reading response. HTTP status code: %s", httpResp.Status))
+	}
+
+	if httpResp.StatusCode/100 != 2 {
+		return nil, errors.Errorf("remote server %s returned HTTP status %s: %s", c.url.String(), httpResp.Status, strings.TrimSpace(string(compressed)))
 	}
 
 	uncompressed, err := snappy.Decode(nil, compressed)
