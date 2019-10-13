@@ -678,7 +678,7 @@ func checkForSeriesSetExpansion(ctx context.Context, expr Expr) {
 			} else {
 				for seria := range series {
 					for i := range series[seria].Labels() {
-						if series[seria].Labels()[i].Name == "job" {
+						if series[seria].Labels()[i].Name == "item_id" {
 							mappedValue, ok := mapping[series[seria].Labels()[i].Value]
 							if ok {
 								series[seria].Labels()[i].Value = mappedValue
