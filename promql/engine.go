@@ -14,14 +14,17 @@
 package promql
 
 import (
+	"bufio"
 	"container/heap"
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -641,6 +644,21 @@ func extractFuncFromPath(p []Node) string {
 	return extractFuncFromPath(p[:len(p)-1])
 }
 
+var mapping = readIdMapping()
+
+func readIdMapping() map[string]string {
+	file, _ := os.Open("mapping.txt")
+	scanner := bufio.NewScanner(file)
+
+	result := make(map[string]string)
+	for scanner.Scan() {
+		line := scanner.Text()
+		splitted := strings.Split(line, " ")
+		id, name := splitted[0], splitted[1]
+		result[id] = name
+	}
+	return result
+}
 func checkForSeriesSetExpansion(ctx context.Context, expr Expr) {
 	switch e := expr.(type) {
 	case *MatrixSelector:
@@ -658,6 +676,16 @@ func checkForSeriesSetExpansion(ctx context.Context, expr Expr) {
 			if err != nil {
 				panic(err)
 			} else {
+				for seria := range series {
+					for i := range series[seria].Labels() {
+						if series[seria].Labels()[i].Name == "job" {
+							mappedValue, ok := mapping[series[seria].Labels()[i].Value]
+							if ok {
+								series[seria].Labels()[i].Value = mappedValue
+							}
+						}
+					}
+				}
 				e.series = series
 			}
 		}
