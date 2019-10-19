@@ -102,7 +102,7 @@ func readIdMapping() map[string]string {
 	result := make(map[string]string)
 	for scanner.Scan() {
 		line := scanner.Text()
-		splitted := strings.Split(line, " ")
+		splitted := strings.SplitN(line, " ", 2)
 		id, name := splitted[0], splitted[1]
 		result[id] = name
 	}
