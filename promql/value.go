@@ -263,6 +263,10 @@ type StorageSeries struct {
 	series Series
 }
 
+func (ss *StorageSeries) AddLabel(l labels.Label) {
+	ss.series.Metric = append(ss.series.Metric, l)
+}
+
 // NewStorageSeries returns a StorageSeries fromfor series.
 func NewStorageSeries(series Series) *StorageSeries {
 	return &StorageSeries{
@@ -276,7 +280,7 @@ func (ss *StorageSeries) Labels() labels.Labels {
 
 // Iterator returns a new iterator of the data of the series.
 func (ss *StorageSeries) Iterator() storage.SeriesIterator {
-	return newStorageSeriesIterator(ss.series)
+	return NewStorageSeriesIterator(ss.series)
 }
 
 type storageSeriesIterator struct {
@@ -284,7 +288,7 @@ type storageSeriesIterator struct {
 	curr   int
 }
 
-func newStorageSeriesIterator(series Series) *storageSeriesIterator {
+func NewStorageSeriesIterator(series Series) *storageSeriesIterator {
 	return &storageSeriesIterator{
 		points: series.Points,
 		curr:   -1,

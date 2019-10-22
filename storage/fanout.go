@@ -489,6 +489,10 @@ type mergeSeries struct {
 	series []Series
 }
 
+func (m *mergeSeries) AddLabel(l labels.Label) {
+	m.labels = append(m.labels, l)
+}
+
 func (m *mergeSeries) Labels() labels.Labels {
 	return m.labels
 }

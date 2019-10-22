@@ -276,11 +276,20 @@ func (s seriesSet) Err() error         { return s.set.Err() }
 func (s seriesSet) At() storage.Series { return series{s: s.set.At()} }
 
 type series struct {
-	s tsdb.Series
+	s                tsdb.Series
+	additionalLabels labels.Labels
 }
 
-func (s series) Labels() labels.Labels            { return toLabels(s.s.Labels()) }
-func (s series) Iterator() storage.SeriesIterator { return storage.SeriesIterator(s.s.Iterator()) }
+func (s series) AddLabel(l labels.Label) {
+	s.additionalLabels = append(s.additionalLabels, l)
+}
+
+func (s series) Labels() labels.Labels {
+	return toLabels(s.s.Labels(), s.additionalLabels)
+}
+func (s series) Iterator() storage.SeriesIterator {
+	return storage.SeriesIterator(s.s.Iterator())
+}
 
 type appender struct {
 	a tsdb.Appender
@@ -350,6 +359,8 @@ func toTSDBLabels(l labels.Labels) tsdbLabels.Labels {
 	return *(*tsdbLabels.Labels)(unsafe.Pointer(&l))
 }
 
-func toLabels(l tsdbLabels.Labels) labels.Labels {
-	return *(*labels.Labels)(unsafe.Pointer(&l))
+func toLabels(l tsdbLabels.Labels, addition labels.Labels) labels.Labels {
+	raw := *(*labels.Labels)(unsafe.Pointer(&l))
+	raw = append(raw, addition...)
+	return raw
 }

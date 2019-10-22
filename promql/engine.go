@@ -14,17 +14,14 @@
 package promql
 
 import (
-	"bufio"
 	"container/heap"
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,7 +56,7 @@ const (
 var (
 	// LookbackDelta determines the time since the last sample after which a time
 	// series is considered stale.
-	LookbackDelta = 5 * time.Minute
+	LookbackDelta time.Duration = 5 * time.Minute
 
 	// DefaultEvaluationInterval is the default evaluation interval of
 	// a subquery in milliseconds.
@@ -318,6 +315,7 @@ func (ng *Engine) NewInstantQuery(q storage.Queryable, qs string, ts time.Time) 
 	}
 	qry := ng.newQuery(q, expr, ts, ts, 0)
 	qry.q = qs
+	fmt.Print(qs)
 
 	return qry, nil
 }
@@ -334,6 +332,7 @@ func (ng *Engine) NewRangeQuery(q storage.Queryable, qs string, start, end time.
 	}
 	qry := ng.newQuery(q, expr, start, end, interval)
 	qry.q = qs
+	fmt.Print(qs)
 
 	return qry, nil
 }
@@ -644,21 +643,6 @@ func extractFuncFromPath(p []Node) string {
 	return extractFuncFromPath(p[:len(p)-1])
 }
 
-var mapping = readIdMapping()
-
-func readIdMapping() map[string]string {
-	file, _ := os.Open("mapping.txt")
-	scanner := bufio.NewScanner(file)
-
-	result := make(map[string]string)
-	for scanner.Scan() {
-		line := scanner.Text()
-		splitted := strings.SplitN(line, " ", 2)
-		id, name := splitted[0], splitted[1]
-		result[id] = name
-	}
-	return result
-}
 func checkForSeriesSetExpansion(ctx context.Context, expr Expr) {
 	switch e := expr.(type) {
 	case *MatrixSelector:
@@ -676,20 +660,40 @@ func checkForSeriesSetExpansion(ctx context.Context, expr Expr) {
 			if err != nil {
 				panic(err)
 			} else {
-				for seria := range series {
-					for i := range series[seria].Labels() {
-						if series[seria].Labels()[i].Name == "item_id" {
-							mappedValue, ok := mapping[series[seria].Labels()[i].Value]
-							if ok {
-								series[seria].Labels()[i].Value = mappedValue
+				for j := range series {
+					for i := range series[j].Labels() {
+						if series[j].Labels()[i].Name == TargetName() {
+							var exists, mappedValue = MapValue(series[j].Labels()[i].Value)
+							if exists {
+								var tmp = series[j]
+								series[j] = SeriesWrapper{
+									delegate:         tmp,
+									additionalLabels: []labels.Label{{Name: "name", Value: mappedValue}}}
 							}
 						}
 					}
 				}
-				e.series = series
 			}
+			e.series = series
 		}
 	}
+}
+
+type SeriesWrapper struct {
+	delegate         storage.Series
+	additionalLabels labels.Labels
+}
+
+func (s SeriesWrapper) Labels() labels.Labels {
+	return append(s.delegate.Labels(), s.additionalLabels...)
+}
+
+func (s SeriesWrapper) AddLabel(l labels.Label) {
+	s.additionalLabels = append(s.additionalLabels, l)
+}
+
+func (s SeriesWrapper) Iterator() storage.SeriesIterator {
+	return s.delegate.Iterator()
 }
 
 func expandSeriesSet(ctx context.Context, it storage.SeriesSet) (res []storage.Series, err error) {

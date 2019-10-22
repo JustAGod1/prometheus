@@ -15,6 +15,7 @@ package remote
 
 import (
 	"fmt"
+	"github.com/prometheus/prometheus/promql"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -385,6 +386,10 @@ type concreteSeries struct {
 	samples []prompb.Sample
 }
 
+func (c *concreteSeries) AddLabel(l labels.Label) {
+	c.labels = append(c.labels, l)
+}
+
 func (c *concreteSeries) Labels() labels.Labels {
 	return labels.New(c.labels...)
 }
@@ -467,11 +472,19 @@ func toLabelMatchers(matchers []*labels.Matcher) ([]*prompb.LabelMatcher, error)
 		default:
 			return nil, errors.New("invalid matcher type")
 		}
-		pbMatchers = append(pbMatchers, &prompb.LabelMatcher{
-			Type:  mType,
-			Name:  m.Name,
-			Value: m.Value,
-		})
+		if m.Name == promql.TargetName() {
+			pbMatchers = append(pbMatchers, &prompb.LabelMatcher{
+				Type:  mType,
+				Name:  m.Name,
+				Value: promql.UnMapValue(m.Value),
+			})
+		} else {
+			pbMatchers = append(pbMatchers, &prompb.LabelMatcher{
+				Type:  mType,
+				Name:  m.Name,
+				Value: m.Value,
+			})
+		}
 	}
 	return pbMatchers, nil
 }

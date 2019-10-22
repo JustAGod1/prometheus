@@ -93,22 +93,6 @@ func (s indexWriterStage) String() string {
 	return "<unknown>"
 }
 
-var mapping = readIdMapping()
-
-func readIdMapping() map[string]string {
-	file, _ := os.Open("mapping.txt")
-	scanner := bufio.NewScanner(file)
-
-	result := make(map[string]string)
-	for scanner.Scan() {
-		line := scanner.Text()
-		splitted := strings.SplitN(line, " ", 2)
-		id, name := splitted[0], splitted[1]
-		result[id] = name
-	}
-	return result
-}
-
 // The table gets initialized with sync.Once but may still cause a race
 // with any other use of the crc32 package anywhere. Thus we initialize it
 // before.
@@ -1108,13 +1092,6 @@ func (dec *Decoder) Series(b []byte, lbls *labels.Labels, chks *[]chunks.Meta) e
 			return errors.Wrap(err, "lookup label value")
 		}
 
-		if ln == "item_id" {
-			mappedValue, ok := mapping[lv]
-			if ok {
-				*lbls = append(*lbls, labels.Label{Name: ln, Value: mappedValue})
-				continue
-			}
-		}
 		*lbls = append(*lbls, labels.Label{Name: ln, Value: lv})
 	}
 

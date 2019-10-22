@@ -106,6 +106,8 @@ type Series interface {
 	// Labels returns the complete set of labels identifying the series.
 	Labels() labels.Labels
 
+	AddLabel(l labels.Label)
+
 	// Iterator returns a new iterator of the data of the series.
 	Iterator() SeriesIterator
 }
